@@ -1,11 +1,13 @@
 package com.y.client;
 
-import com.y.Client;
+import lombok.extern.slf4j.Slf4j;
 import org.junit.Test;
 import org.y.fdfsclient.FdfsClient;
+import org.y.fdfsclient.protocol.GroupInfo;
 
-import java.util.concurrent.TimeUnit;
+import java.util.List;
 
+@Slf4j
 public class ClientTest {
 
     @Test
@@ -13,8 +15,6 @@ public class ClientTest {
         String trackerAddr = System.getProperty("trackerAddr");
         FdfsClient client = new FdfsClient(trackerAddr);
         client.init();
-        client.getListGroup();
-        Thread.sleep(Integer.MAX_VALUE);
     }
 
 }

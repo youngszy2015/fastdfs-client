@@ -1,5 +1,8 @@
 package org.y.fdfsclient;
 
+import io.netty.channel.pool.ChannelPoolHandler;
+import io.netty.channel.pool.FixedChannelPool;
+import org.y.fdfsclient.protocol.GroupInfo;
 import org.y.fdfsclient.protocol.ProtoCommon;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.buffer.ByteBuf;
@@ -13,12 +16,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.y.fdfsclient.command.Command;
 import org.y.fdfsclient.command.ListGroupCommand;
 
+import java.util.List;
+
 @Slf4j
 public class FdfsClient {
 
     private String trackerAddr;
 
     private Bootstrap trackerBootStrap = new Bootstrap();
+
+    private FixedChannelPool trackerChannelPool;
 
     private NioEventLoopGroup trackerGroup = new NioEventLoopGroup(1);
 
@@ -46,24 +53,32 @@ public class FdfsClient {
                         ch.pipeline().addLast(new TrackerHandler());
                     }
                 });
+        //get group info
+        List<GroupInfo> listGroup = getListGroup();
+        for (GroupInfo groupInfo : listGroup) {
+
+
+        }
+
 
     }
 
 
-    public void getListGroup() {
+    public List<GroupInfo> getListGroup() {
         ListGroupCommand listGroupCommand = new ListGroupCommand();
         byte[] encode = listGroupCommand.encode();
         try {
             Channel trackerChannel = getTrackerChannel();
             Attribute<Object> command_attr = trackerChannel.attr(AttributeKey.valueOf("COMMAND_ATTR"));
             command_attr.set(listGroupCommand);
-            System.out.println("write: " + listGroupCommand);
-            ProtoCommon.printBytes("write encode: ", encode);
             ByteBuf out = trackerChannel.alloc().buffer().writeBytes(encode);
             trackerChannel.writeAndFlush(out);
+            List<GroupInfo> groupInfos = (List<GroupInfo>) listGroupCommand.get();
+            return groupInfos;
         } catch (Exception e) {
             e.printStackTrace();
         }
+        return null;
     }
 
 
@@ -85,7 +100,7 @@ public class FdfsClient {
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
             Command command = ctx.channel().attr(COMMAND_ATTR).get();
-            System.out.println("read: " + command);
+            log.info("read:{} ", command);
             command.decode(ctx.channel(), (ByteBuf) msg);
         }
     }

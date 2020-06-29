@@ -67,7 +67,15 @@ public abstract class AbstractCommand extends CountDownLatch implements Command 
         } else {
             cacheBuf.writeBytes(in);
         }
-        doDecode(cacheBuf, decodeBodyLength);
+        Throwable ex = null;
+        try {
+            Object result = doDecode(cacheBuf, decodeBodyLength);
+            complete(result, null);
+        } catch (Exception e) {
+            complete(result, e);
+        } finally {
+            //todo
+        }
     }
 
 
@@ -76,9 +84,35 @@ public abstract class AbstractCommand extends CountDownLatch implements Command 
         return doEncode();
     }
 
+    private Object result;
+    private Throwable cause;
+
+    private void complete(Object result, Throwable cause) {
+        if (cause == null) {
+            this.result = result;
+        } else {
+            this.cause = cause;
+        }
+        countDown();
+    }
+
+    public Object get() throws Exception {
+        try {
+            await();
+            if (cause != null) {
+                throw new Exception(cause.getMessage());
+            }
+            return result;
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+
     protected abstract byte[] doEncode();
 
-    protected abstract byte doDecode(ByteBuf in, long decodeBodyLength);
+    protected abstract Object doDecode(ByteBuf in, long decodeBodyLength);
 
 
     public byte[] packHeader(byte cmd, long pkg_len, byte errno) {

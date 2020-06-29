@@ -1,12 +1,19 @@
 package org.y.fdfsclient.command;
 
+import lombok.Data;
+import org.y.fdfsclient.protocol.GroupInfo;
 import org.y.fdfsclient.protocol.ProtoCommon;
 import io.netty.buffer.ByteBuf;
 import lombok.extern.slf4j.Slf4j;
 
+import java.util.ArrayList;
+import java.util.List;
+
 //获取group信息
 @Slf4j
 public class ListGroupCommand extends AbstractCommand {
+
+    static int filedTotalSize = 105;
 
 
     public ListGroupCommand() {
@@ -19,14 +26,31 @@ public class ListGroupCommand extends AbstractCommand {
     }
 
     @Override
-    protected byte doDecode(ByteBuf in, long decodeBodyLength) {
+    protected Object doDecode(ByteBuf in, long decodeBodyLength) {
         byte[] body = new byte[(int) decodeBodyLength];
         in.readBytes(body);
+        int i = body.length / 105;
+        int offset = 0;
         ProtoCommon.printBytes("list group body", body);
-        log.info("0-17,groupName:[{}]", new String(body, 0, 17));
-        log.info("18-26,totalMB:[{}]", new String(body, 18, 26));
-        log.info("26-34,freeMB:[{}]", new String(body, 18, 34));
-        return 0;
+        List<GroupInfo> groupInfos = new ArrayList<>();
+        for (int j = 0; j < i; j++) {
+            GroupInfo groupInfo = new GroupInfo();
+            groupInfo.setGroupName(new String(body, offset, offset + 17));
+            groupInfo.setTotalMB(buff2long(body, offset + 17));
+            groupInfo.setFreeMB(buff2long(body, offset + 25));
+            groupInfo.setTrunkFreeMB(buff2long(body, offset + 33));
+            groupInfo.setStorageCount((int) buff2long(body, offset + 41));
+            groupInfo.setStoragePort((int) buff2long(body, offset + 49));
+            groupInfo.setStorageHttpPort((int) buff2long(body, offset + 57));
+            groupInfo.setActiveCount((int) buff2long(body, offset + 65));
+            groupInfo.setCurrentWriteServer((int) buff2long(body, offset + 73));
+            groupInfo.setStorePathCount((int) buff2long(body, offset + 81));
+            groupInfo.setSubdirCountPerPath((int) buff2long(body, offset + 89));
+            groupInfo.setCurrentTrunkFileId((int) buff2long(body, offset + 97));
+            offset += 105;
+            groupInfos.add(groupInfo);
+        }
+        return groupInfos;
     }
 
 
@@ -34,4 +58,6 @@ public class ListGroupCommand extends AbstractCommand {
     public String toString() {
         return "ListGroupCommand:" + this.hashCode();
     }
+
+
 }
