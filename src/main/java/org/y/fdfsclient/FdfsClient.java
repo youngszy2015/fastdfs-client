@@ -2,6 +2,7 @@ package org.y.fdfsclient;
 
 import io.netty.channel.pool.ChannelPoolHandler;
 import io.netty.channel.pool.FixedChannelPool;
+import io.netty.util.concurrent.Future;
 import org.y.fdfsclient.protocol.GroupInfo;
 import org.y.fdfsclient.protocol.ProtoCommon;
 import io.netty.bootstrap.Bootstrap;
@@ -41,34 +42,56 @@ public class FdfsClient {
         String[] split = trackerAddr.split(":");
         String ip = split[0];
         int port = Integer.parseInt(split[1]);
-        trackerBootStrap
-                .group(trackerGroup)
-                .option(ChannelOption.TCP_NODELAY, true)
-                .option(ChannelOption.SO_KEEPALIVE, true)
-                .channel(NioSocketChannel.class)
-                .remoteAddress(ip, port)
-                .handler(new ChannelInitializer<SocketChannel>() {
-                    @Override
-                    protected void initChannel(SocketChannel ch) throws Exception {
-                        ch.pipeline().addLast(new TrackerHandler());
-                    }
-                });
+        initTrackerChannelPool(ip, port);
         //get group info
         List<GroupInfo> listGroup = getListGroup();
         for (GroupInfo groupInfo : listGroup) {
-
+            System.out.println(groupInfo);
 
         }
 
 
     }
 
+    private void initTrackerChannelPool(String ip, int port) {
+        trackerBootStrap
+                .group(trackerGroup)
+                .option(ChannelOption.TCP_NODELAY, true)
+                .option(ChannelOption.SO_KEEPALIVE, true)
+                .channel(NioSocketChannel.class)
+                .remoteAddress(ip, port);
+
+
+        trackerChannelPool = new FixedChannelPool(trackerBootStrap, new ChannelPoolHandler() {
+            @Override
+            public void channelReleased(Channel ch) throws Exception {
+                log.info("Released channel:{}", ch.id().asShortText());
+            }
+
+            @Override
+            public void channelAcquired(Channel ch) throws Exception {
+                log.info("Acquired channel:{}", ch.id().asShortText());
+            }
+
+            @Override
+            public void channelCreated(Channel ch) throws Exception {
+                log.info("Created channel:{}", ch.id().asShortText());
+                ch.pipeline().addLast(new TrackerHandler());
+            }
+        }, Runtime.getRuntime().availableProcessors() * 2);
+    }
+
 
     public List<GroupInfo> getListGroup() {
         ListGroupCommand listGroupCommand = new ListGroupCommand();
         byte[] encode = listGroupCommand.encode();
+        Channel trackerChannel = null;
         try {
-            Channel trackerChannel = getTrackerChannel();
+            Future<Channel> sync = trackerChannelPool.acquire().sync();
+            if (!sync.isSuccess()) {
+                return null;
+            }
+            trackerChannel = sync.get();
             Attribute<Object> command_attr = trackerChannel.attr(AttributeKey.valueOf("COMMAND_ATTR"));
             command_attr.set(listGroupCommand);
             ByteBuf out = trackerChannel.alloc().buffer().writeBytes(encode);
@@ -77,6 +100,10 @@ public class FdfsClient {
             return groupInfos;
         } catch (Exception e) {
             e.printStackTrace();
+        } finally {
+            if (null != trackerChannel) {
+                trackerChannelPool.release(trackerChannel);
+            }
         }
         return null;
     }
