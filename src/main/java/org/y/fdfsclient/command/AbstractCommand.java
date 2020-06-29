@@ -64,17 +64,25 @@ public abstract class AbstractCommand extends CountDownLatch implements Command 
             decodeBodyLength = bodyLength;
             cacheBuf = channel.alloc().buffer();
             cacheBuf.writeBytes(in);
+            System.out.println("cacheBuf write index: " + cacheBuf.writerIndex());
+            if (cacheBuf.readableBytes() < bodyLength) {
+                return;
+            }
         } else {
             cacheBuf.writeBytes(in);
+            System.out.println("cacheBuf write index: " + cacheBuf.writerIndex());
+            if (cacheBuf.readableBytes() < decodeBodyLength) {
+                return;
+            }
         }
         Throwable ex = null;
         try {
             Object result = doDecode(cacheBuf, decodeBodyLength);
             complete(result, null);
+            cacheBuf.release();
         } catch (Exception e) {
             complete(result, e);
-        } finally {
-            //todo
+            cacheBuf.release();
         }
     }
 
