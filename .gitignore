@@ -1,18 +1,42 @@
-bin
-build
-out
-target
-.settings
+HELP.md
+/target/
+!.mvn/wrapper/maven-wrapper.jar
+
+### STS ###
+apidoc/
+.apt_generated
 .classpath
+.factorypath
 .project
-.gradle
-.DS_Store
+.settings
+.springBeans
+.sts4-cache
+
+# Intellij project files
 *.iml
 *.ipr
 *.iws
-*.log
 .idea
+node_modules/
+target/
+cache/
+trend/
+/cache
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+/build/
+/@log.home.path@/
+/cache/
 
-*.conf
-*.PNG
-.idea
+### VS Code ###
+.vscode/
+*/.mvn/*
+ .idea/
+*mvnw*
+#*/src/test/
+
+.DS_Store
