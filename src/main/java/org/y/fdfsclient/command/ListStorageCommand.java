@@ -57,7 +57,9 @@ public class ListStorageCommand extends AbstractCommand {
         List<StorageInfo> storageInfos = new ArrayList<>();
         for (int j = 0; j < i; j++) {
             StorageInfo storageInfo = new StorageInfo();
-            String ip = new String(body, offset, 161);
+            byte status = body[offset + 1];
+            storageInfo.setStatus(status);
+            String ip = new String(body, offset + 17, 16);
             storageInfo.setIpAddr(ip);
             int port = (int) buff2long(body, offset + 247);
             storageInfo.setStoragePort(port);

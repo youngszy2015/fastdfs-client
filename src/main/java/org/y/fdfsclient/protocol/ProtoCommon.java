@@ -5,6 +5,7 @@ package org.y.fdfsclient.protocol;
  * Fdfs 协议工具类
  *
  * protocol common functions
+ * see https://github.com/happyfish100/fastdfs-client-java/blob/master/src/main/java/org/csource/fastdfs/ProtoCommon.java
  *
  * @author Happy Fish / YuQing
  * @version Version 1.18

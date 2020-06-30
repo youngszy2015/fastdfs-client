@@ -19,7 +19,6 @@ import org.y.fdfsclient.command.Command;
 import org.y.fdfsclient.command.ListGroupCommand;
 import org.y.fdfsclient.protocol.StorageInfo;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,8 +31,9 @@ public class FdfsClient {
     private Bootstrap trackerBootStrap = new Bootstrap();
 
     private FixedChannelPool trackerChannelPool;
-
+    //todo
     Map<String, FixedChannelPool> storagePool = new ConcurrentHashMap<>();
+    Map<String/**groupName*/, String/**ip addr*/> storageIpTable = new ConcurrentHashMap<>();
 
     private NioEventLoopGroup trackerGroup = new NioEventLoopGroup(1);
 
@@ -43,30 +43,41 @@ public class FdfsClient {
 
 
     public void init() throws Exception {
-        if (trackerAddr == null || trackerAddr.length() == 0) {
-            throw new Exception("tracker addr not be null");
-        }
-        String[] split = trackerAddr.split(":");
-        String ip = split[0];
-        int port = Integer.parseInt(split[1]);
-        initTrackerChannelPool(ip, port);
-        //get group info
-        List<GroupInfo> listGroup = getListGroup();
-        for (GroupInfo groupInfo : listGroup) {
-            String groupName = groupInfo.getGroupName();
-            List<StorageInfo> storageInfos = getStorageForEachGroup(groupName);
-            for (StorageInfo storageInfo : storageInfos) {
-                System.out.println("ip: " + storageInfo.getIpAddr() + " port: " + storageInfo.getStoragePort());
+        synchronized (FdfsClient.class) {
+            if (trackerAddr == null || trackerAddr.length() == 0) {
+                throw new Exception("tracker addr not be null");
             }
-
-
+            String[] split = trackerAddr.split(":");
+            String ip = split[0];
+            int port = Integer.parseInt(split[1]);
+            initTrackerChannelPool(ip, port);
+            //get group info
+            List<GroupInfo> listGroup = getListGroup();
+            for (GroupInfo groupInfo : listGroup) {
+                String groupName = groupInfo.getGroupName();
+                List<StorageInfo> storageInfos = getStorageForEachGroup(groupName);
+                for (StorageInfo storageInfo : storageInfos) {
+                    log.info("[storage] ip: " + storageInfo.getIpAddr() + " port: " + storageInfo.getStoragePort());
+                    if (storageInfo.getStatus() == (byte) 7) {
+                        //active status
+                        storageIpTable.put(groupName, storageInfo.getIpAddr() + ":" + storageInfo.getStoragePort());
+                    }
+                }
+            }
+            registerShutdownHook();
         }
+    }
+
+
+    //upload file
+    //todo expire
+    public void uploadFile(byte[] fileBytes, String fileName) {
 
 
     }
 
+
     private List<StorageInfo> getStorageForEachGroup(String groupName) throws Exception {
-        List<StorageInfo> addr = new ArrayList<>(0);
         ListStorageCommand listStorageCommand = new ListStorageCommand(groupName);
         byte[] encode = listStorageCommand.encode();
         if (encode.length == 0) {
@@ -82,17 +93,13 @@ public class FdfsClient {
             Attribute<Object> command_attr = trackerChannel.attr(AttributeKey.valueOf("COMMAND_ATTR"));
             command_attr.set(listStorageCommand);
             ProtoCommon.printBytes("list storage encoder ", encode);
-//            byte[] fake = {0, 0, 0, 0, 0, 0, 0, 16, 92, 0, 103, 114, 111, 117, 112, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
             ByteBuf out = trackerChannel.alloc().buffer(encode.length).writeBytes(encode);
             trackerChannel.writeAndFlush(out);
             Object o = listStorageCommand.get();
-            System.out.println(o);
-
+            return (List<StorageInfo>) o;
         } finally {
             trackerChannelPool.release(trackerChannel);
         }
-        return addr;
-
     }
 
 
@@ -164,7 +171,6 @@ public class FdfsClient {
 
 
     static class TrackerHandler extends ChannelInboundHandlerAdapter {
-
         AttributeKey<Command> COMMAND_ATTR = AttributeKey.valueOf("COMMAND_ATTR");
 
         @Override
@@ -173,6 +179,18 @@ public class FdfsClient {
             log.info("read:{} ", command);
             command.decode(ctx.channel(), (ByteBuf) msg);
         }
+    }
+
+
+    private void registerShutdownHook() {
+        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+            @Override
+            public void run() {
+                if (null != trackerChannelPool) {
+                    trackerChannelPool.close();
+                }
+            }
+        }));
     }
 
 }
