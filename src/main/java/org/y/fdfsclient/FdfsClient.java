@@ -7,8 +7,7 @@ import io.netty.util.NetUtil;
 import io.netty.util.concurrent.Future;
 import io.netty.util.concurrent.GenericFutureListener;
 import org.apache.commons.io.FileUtils;
-import org.y.fdfsclient.command.ListStorageCommand;
-import org.y.fdfsclient.command.UploadFileCommand;
+import org.y.fdfsclient.command.*;
 import org.y.fdfsclient.protocol.GroupInfo;
 import org.y.fdfsclient.protocol.ProtoCommon;
 import io.netty.bootstrap.Bootstrap;
@@ -20,8 +19,6 @@ import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.util.Attribute;
 import io.netty.util.AttributeKey;
 import lombok.extern.slf4j.Slf4j;
-import org.y.fdfsclient.command.Command;
-import org.y.fdfsclient.command.ListGroupCommand;
 import org.y.fdfsclient.protocol.StorageInfo;
 import org.y.fdfsclient.protocol.UploadFileResponse;
 
@@ -120,9 +117,38 @@ public class FdfsClient {
                 channel.close();
             }
         }
-
-
     }
+
+
+    public byte[] downloadFile(String groupName, String path) throws Exception {
+        DownloadFileCommand downloadFileCommand = new DownloadFileCommand(groupName, path);
+        Channel channel = null;
+        try {
+            String addr = pickStorageAddr();
+            assert addr != null;
+            channel = getStorageChannel(addr);
+            assert channel != null;
+            byte[] encode = downloadFileCommand.encode();
+            ProtoCommon.printBytes(" download file ", encode);
+            if (channel.isWritable()) {
+                Attribute<Object> command_attr = channel.attr(AttributeKey.valueOf("COMMAND_ATTR"));
+                command_attr.set(downloadFileCommand);
+                ByteBuf byteBuf = channel.alloc().buffer(encode.length).writeBytes(encode);
+                channel.writeAndFlush(byteBuf);
+            }
+            Object o = downloadFileCommand.get();
+            byte[] fileByte = (byte[]) o;
+            return fileByte;
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (null != channel) {
+                channel.close();
+            }
+        }
+        return new byte[0];
+    }
+
 
     private Channel getStorageChannel(String addr) throws Exception {
         Bootstrap b = new Bootstrap();

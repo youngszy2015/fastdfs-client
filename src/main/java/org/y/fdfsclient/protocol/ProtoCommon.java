@@ -3,7 +3,7 @@ package org.y.fdfsclient.protocol;
 
 /**
  * Fdfs 协议工具类
- *
+ * <p>
  * protocol common functions
  * see https://github.com/happyfish100/fastdfs-client-java/blob/master/src/main/java/org/csource/fastdfs/ProtoCommon.java
  *
@@ -121,7 +121,7 @@ public class ProtoCommon {
         for (byte aByte : bytes) {
             System.out.print(aByte + " ");
         }
-        System.out.println("\n");
+        System.out.println("\n----------------- " + desc + " ----------------------------");
     }
 
 }

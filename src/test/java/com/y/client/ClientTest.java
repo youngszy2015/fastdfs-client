@@ -5,11 +5,8 @@ import org.apache.commons.io.FileUtils;
 import org.junit.Before;
 import org.junit.Test;
 import org.y.fdfsclient.FdfsClient;
-import org.y.fdfsclient.protocol.GroupInfo;
 
 import java.io.File;
-import java.io.IOException;
-import java.util.List;
 
 @Slf4j
 public class ClientTest {
@@ -35,6 +32,17 @@ public class ClientTest {
         File file = new File(path);
         byte[] bytes = FileUtils.readFileToByteArray(file);
         client.uploadFile(bytes, null);
+    }
+
+
+    @Test
+    public void testDownload() throws Exception {
+        String groupName = "group1";
+        String path = "M00/1E/FE/CmSfjF776M6AI0ELAAAAEuQpMgk723.txt";
+        byte[] bytes = client.downloadFile(groupName, path);
+        File file = new File("D:\\zlz\\fastdfs-client\\src\\test\\java\\com\\y\\client\\" + System.currentTimeMillis() + ".txt");
+        if (!file.exists()) file.createNewFile();
+        FileUtils.writeByteArrayToFile(file, bytes);
     }
 
 }
