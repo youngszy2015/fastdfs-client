@@ -1,9 +1,14 @@
 package org.y.fdfsclient;
 
+import com.sun.corba.se.impl.activation.CommandHandler;
 import io.netty.channel.pool.ChannelPoolHandler;
 import io.netty.channel.pool.FixedChannelPool;
+import io.netty.util.NetUtil;
 import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.GenericFutureListener;
+import org.apache.commons.io.FileUtils;
 import org.y.fdfsclient.command.ListStorageCommand;
+import org.y.fdfsclient.command.UploadFileCommand;
 import org.y.fdfsclient.protocol.GroupInfo;
 import org.y.fdfsclient.protocol.ProtoCommon;
 import io.netty.bootstrap.Bootstrap;
@@ -18,10 +23,17 @@ import lombok.extern.slf4j.Slf4j;
 import org.y.fdfsclient.command.Command;
 import org.y.fdfsclient.command.ListGroupCommand;
 import org.y.fdfsclient.protocol.StorageInfo;
+import org.y.fdfsclient.protocol.UploadFileResponse;
 
+import javax.management.relation.RoleUnresolved;
+import java.io.File;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class FdfsClient {
@@ -33,7 +45,7 @@ public class FdfsClient {
     private FixedChannelPool trackerChannelPool;
     //todo
     Map<String, FixedChannelPool> storagePool = new ConcurrentHashMap<>();
-    Map<String/**groupName*/, String/**ip addr*/> storageIpTable = new ConcurrentHashMap<>();
+    Map<String/**groupName*/, List<StorageInfo>/**ip addr*/> storageIpTable = new ConcurrentHashMap<>();
 
     private NioEventLoopGroup trackerGroup = new NioEventLoopGroup(1);
 
@@ -56,24 +68,96 @@ public class FdfsClient {
             for (GroupInfo groupInfo : listGroup) {
                 String groupName = groupInfo.getGroupName();
                 List<StorageInfo> storageInfos = getStorageForEachGroup(groupName);
+
+
                 for (StorageInfo storageInfo : storageInfos) {
-                    log.info("[storage] ip: " + storageInfo.getIpAddr() + " port: " + storageInfo.getStoragePort());
-                    if (storageInfo.getStatus() == (byte) 7) {
-                        //active status
-                        storageIpTable.put(groupName, storageInfo.getIpAddr() + ":" + storageInfo.getStoragePort());
-                    }
+                    log.info("[storage] ip: " + storageInfo.getIpAddr() + " port: " + storageInfo.getStoragePort() + ((storageInfo.getStatus() == (byte) 7) ? " ACTIVE" : " UNKNOWN"));
                 }
+
+                List<StorageInfo> storageInfoList = storageInfos.stream().filter(n -> n.getStatus() == (byte) 7).collect(Collectors.toList());
+                if (storageInfoList.size() > 0) {
+                    storageIpTable.put(groupName, storageInfoList);
+                }
+
+
             }
             registerShutdownHook();
         }
     }
 
 
-    //upload file
-    //todo expire
-    public void uploadFile(byte[] fileBytes, String fileName) {
+    public void uploadFile(byte[] fileBytes, String fileName) throws Exception {
+        String groupName = null;
+        UploadFileCommand fileCommand = new UploadFileCommand(groupName, fileBytes, "txt", 1);
+        String addr = pickStorageAddr();
+        if (null == addr) {
+            throw new Exception("pick channel err");
+        }
+        Channel channel = null;
+        try {
+            channel = getStorageChannel(addr);
+            byte[] encode = fileCommand.encode();
+            ByteBuf buffer = channel.alloc().buffer(encode.length).writeBytes(encode);
+            Attribute<Object> command_attr = channel.attr(AttributeKey.valueOf("COMMAND_ATTR"));
+            command_attr.set(fileCommand);
+            if (channel.isActive() && channel.isWritable()) {
+                buffer.writeBytes(fileBytes);
+                ChannelFuture channelFuture = channel.writeAndFlush(buffer);
+                channelFuture.addListener(future -> {
+                    if (future.isSuccess()) {
+                        System.out.println("write future success");
+                    } else {
+                        future.cause().printStackTrace();
+                    }
+                });
+                UploadFileResponse o = (UploadFileResponse) fileCommand.get();
+                System.out.println(o);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            if (null != channel) {
+                channel.close();
+            }
+        }
 
 
+    }
+
+    private Channel getStorageChannel(String addr) throws Exception {
+        Bootstrap b = new Bootstrap();
+        String[] split = addr.split(":");
+        NioEventLoopGroup g = new NioEventLoopGroup(1);
+        b.group(g)
+                .option(ChannelOption.TCP_NODELAY, true)
+                .option(ChannelOption.SO_KEEPALIVE, true)
+                .channel(NioSocketChannel.class)
+                .remoteAddress(split[0], Integer.parseInt(split[1]));
+
+        b.handler(new ChannelInitializer<SocketChannel>() {
+            @Override
+            protected void initChannel(SocketChannel ch) throws Exception {
+                ch.pipeline().addLast(new TrackerHandler());
+            }
+        });
+
+        ChannelFuture sync = b.connect(split[0], Integer.parseInt(split[1])).sync();
+        if (sync.isSuccess()) {
+            return sync.channel();
+        }
+        return null;
+    }
+
+    private String pickStorageAddr() {
+        for (String s : storageIpTable.keySet()) {
+            List<StorageInfo> storageInfoList = storageIpTable.get(s);
+            if (storageInfoList.size() > 0) {
+                StorageInfo storageInfo = storageInfoList.get(0);
+                return storageInfo.getIpAddr() + ":" + storageInfo.getStoragePort();
+            }
+
+        }
+        return null;
     }
 
 
@@ -179,6 +263,14 @@ public class FdfsClient {
             log.info("read:{} ", command);
             command.decode(ctx.channel(), (ByteBuf) msg);
         }
+
+
+        @Override
+        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
+            cause.printStackTrace();
+        }
+
+
     }
 
 

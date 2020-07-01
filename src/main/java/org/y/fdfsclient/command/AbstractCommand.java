@@ -75,7 +75,6 @@ public abstract class AbstractCommand extends CountDownLatch implements Command 
                 return;
             }
         }
-        Throwable ex = null;
         try {
             Object result = doDecode(cacheBuf, decodeBodyLength);
             complete(result, null);
