@@ -1,20 +1,19 @@
 package org.y.fdfsclient.command;
 
 import lombok.Data;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.y.fdfsclient.protocol.GroupInfo;
 import org.y.fdfsclient.protocol.ProtoCommon;
 import io.netty.buffer.ByteBuf;
-import lombok.extern.slf4j.Slf4j;
 
 import java.util.ArrayList;
 import java.util.List;
 
 //获取group信息
-@Slf4j
 public class ListGroupCommand extends AbstractCommand {
-
+    private static final Logger log = LoggerFactory.getLogger(ListGroupCommand.class);
     static int filedTotalSize = 105;
-
 
     public ListGroupCommand() {
         super(ProtoCommon.TRACKER_PROTO_CMD_RESP, -1);

@@ -295,8 +295,6 @@ public class FdfsClient {
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
             cause.printStackTrace();
         }
-
-
     }
 
 

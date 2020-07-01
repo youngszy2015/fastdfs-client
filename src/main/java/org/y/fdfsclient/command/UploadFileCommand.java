@@ -1,19 +1,20 @@
 package org.y.fdfsclient.command;
 
 import io.netty.buffer.ByteBuf;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.y.fdfsclient.protocol.ProtoCommon;
 import org.y.fdfsclient.protocol.UploadFileResponse;
 
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 
 /**
  * @author szy47143
  * @date 2020/6/30 9:25
  */
-@Slf4j
 public class UploadFileCommand extends AbstractCommand {
+
+    private static final Logger log = LoggerFactory.getLogger(UploadFileCommand.class);
 
     private String groupName;
 

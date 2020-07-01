@@ -1,9 +1,9 @@
 package org.y.fdfsclient.command;
 
 import io.netty.buffer.ByteBuf;
-import org.y.fdfsclient.protocol.GroupInfo;
 import org.y.fdfsclient.protocol.ProtoCommon;
 import org.y.fdfsclient.protocol.StorageInfo;
+import org.y.fdfsclient.util.Constant;
 
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
@@ -20,31 +20,24 @@ public class ListStorageCommand extends AbstractCommand {
 
     @Override
     protected byte[] doEncode() {
-        try {
-            byte[] bs = groupName.getBytes("UTF-8");
-            byte[] bGroupName = new byte[ProtoCommon.FDFS_GROUP_NAME_MAX_LEN];
-            int len;
-            if (bs.length <= ProtoCommon.FDFS_GROUP_NAME_MAX_LEN) {
-                len = bs.length;
-            } else {
-                len = ProtoCommon.FDFS_GROUP_NAME_MAX_LEN;
-            }
-            Arrays.fill(bGroupName, (byte) 0);
-            System.arraycopy(bs, 0, bGroupName, 0, len);
-
-            ProtoCommon.printBytes("list storage bgname ", bGroupName);
-
-            byte[] header = packHeader(ProtoCommon.TRACKER_PROTO_CMD_SERVER_LIST_STORAGE, ProtoCommon.FDFS_GROUP_NAME_MAX_LEN, (byte) 0);
-            byte[] wholePkg = new byte[header.length + bGroupName.length];
-            System.arraycopy(header, 0, wholePkg, 0, header.length);
-            System.arraycopy(bGroupName, 0, wholePkg, header.length, bGroupName.length);
-            return wholePkg;
-
-
-        } catch (UnsupportedEncodingException e) {
-            e.printStackTrace();
+        byte[] bs = groupName.getBytes(Constant.DEFAULT_CHARSET);
+        byte[] bGroupName = new byte[ProtoCommon.FDFS_GROUP_NAME_MAX_LEN];
+        int len;
+        if (bs.length <= ProtoCommon.FDFS_GROUP_NAME_MAX_LEN) {
+            len = bs.length;
+        } else {
+            len = ProtoCommon.FDFS_GROUP_NAME_MAX_LEN;
         }
-        return new byte[0];
+        Arrays.fill(bGroupName, (byte) 0);
+        System.arraycopy(bs, 0, bGroupName, 0, len);
+
+        ProtoCommon.printBytes("list storage bgname ", bGroupName);
+
+        byte[] header = packHeader(ProtoCommon.TRACKER_PROTO_CMD_SERVER_LIST_STORAGE, ProtoCommon.FDFS_GROUP_NAME_MAX_LEN, (byte) 0);
+        byte[] wholePkg = new byte[header.length + bGroupName.length];
+        System.arraycopy(header, 0, wholePkg, 0, header.length);
+        System.arraycopy(bGroupName, 0, wholePkg, header.length, bGroupName.length);
+        return wholePkg;
     }
 
     @Override

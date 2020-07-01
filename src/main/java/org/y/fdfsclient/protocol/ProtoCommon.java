@@ -1,8 +1,11 @@
 package org.y.fdfsclient.protocol;
 
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
- * Fdfs 协议工具类
+ * Fastdfs 协议工具类
  * <p>
  * protocol common functions
  * see https://github.com/happyfish100/fastdfs-client-java/blob/master/src/main/java/org/csource/fastdfs/ProtoCommon.java
@@ -11,6 +14,7 @@ package org.y.fdfsclient.protocol;
  * @version Version 1.18
  */
 public class ProtoCommon {
+    private static final Logger logger = LoggerFactory.getLogger(ProtoCommon.class);
     public static final byte FDFS_PROTO_CMD_QUIT = 82;
     public static final byte TRACKER_PROTO_CMD_SERVER_LIST_GROUP = 91;
     public static final byte TRACKER_PROTO_CMD_SERVER_LIST_STORAGE = 92;
@@ -116,12 +120,18 @@ public class ProtoCommon {
         }
     }
 
+    /**
+     * @param desc
+     * @param bytes
+     */
     public static void printBytes(String desc, byte[] bytes) {
-        System.out.println("----------------- " + desc + " ----------------------------");
+        logger.info("----------------- " + desc + " ----------------------------");
+        StringBuilder builder = new StringBuilder();
         for (byte aByte : bytes) {
-            System.out.print(aByte + " ");
+            builder.append(aByte + " ");
         }
-        System.out.println("\n----------------- " + desc + " ----------------------------");
+        logger.info(builder.toString());
+        logger.info("----------------- " + desc + " ----------------------------");
     }
 
 }

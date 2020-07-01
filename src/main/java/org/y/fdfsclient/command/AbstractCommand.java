@@ -1,17 +1,21 @@
 package org.y.fdfsclient.command;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.y.fdfsclient.exception.FastdfsClientException;
 import org.y.fdfsclient.protocol.ProtoCommon;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
-import lombok.extern.slf4j.Slf4j;
 
 import java.util.Arrays;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.y.fdfsclient.protocol.ProtoCommon.*;
 
-@Slf4j
 public abstract class AbstractCommand extends CountDownLatch implements Command {
+
+    private static final Logger log = LoggerFactory.getLogger(AbstractCommand.class);
 
     private int expectCmd;
 
@@ -103,15 +107,28 @@ public abstract class AbstractCommand extends CountDownLatch implements Command 
         countDown();
     }
 
-    public Object get() throws Exception {
+    public Object get() throws FastdfsClientException {
         try {
             await();
             if (cause != null) {
-                throw new Exception(cause.getMessage());
+                throw new FastdfsClientException(cause.getMessage());
             }
             return result;
         } catch (InterruptedException e) {
             e.printStackTrace();
+        }
+        return null;
+    }
+
+    public Object get(long timeout, TimeUnit unit) throws FastdfsClientException {
+        try {
+            await(timeout, unit);
+            if (cause != null) {
+                throw new FastdfsClientException(cause.getMessage());
+            }
+            return result;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
         return null;
     }
