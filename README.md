@@ -6,7 +6,7 @@ fastdfs-client with netty
 
 Usage：
 
-    ```
+```
         FastDfsClient fastDfsClient = new FastDfsClient();
         fastDfsClient.create();
         String filePath = "";
@@ -14,4 +14,4 @@ Usage：
         byte[] bytes = FileUtils.readFileToByteArray(file);
         UploadFileResponse response = fastDfsClient.uploadFile(null, bytes, "txt");
         fastDfsClient.close();
-    ```
+```

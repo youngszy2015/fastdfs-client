@@ -9,7 +9,6 @@ import org.y.fdfsclient.exception.FastdfsClientException;
 import org.y.fdfsclient.protocol.UploadFileResponse;
 
 import java.io.File;
-import java.io.IOException;
 
 /**
  * @author szy47143
