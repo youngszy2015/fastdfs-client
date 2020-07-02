@@ -15,4 +15,6 @@ public interface Command {
     Object get() throws FastdfsClientException;
 
     Object get(long timeout, TimeUnit unit) throws FastdfsClientException;
+
+    void completeOnError(Throwable exception);
 }

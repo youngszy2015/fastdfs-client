@@ -20,9 +20,7 @@ import org.y.fdfsclient.util.Assert;
 import org.y.fdfsclient.util.IpParseUtil;
 
 import java.net.SocketAddress;
-import java.util.Map;
-import java.util.Random;
-import java.util.ArrayList;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -33,21 +31,22 @@ public class ConnectionManager {
     private static Logger logger = LoggerFactory.getLogger(ConnectionManager.class);
 
     private FixedChannelPool trackerChannelPool;
+
+    private FdfsClientConfig config;
     //    private FixedChannelPool storageChannelPool;
     private Random random = new Random();
 
     private Map<String/**groupName*/, Map<SocketAddress /**tracker addr*/, FixedChannelPool>> storageChannelPool = new ConcurrentHashMap<>();
 
-
-    private String trackerAddr;
     private AtomicBoolean trackerInit = new AtomicBoolean(false);
     private AtomicBoolean storageInit = new AtomicBoolean(false);
 
     private static AttributeKey<Command> COMMAND_ATTR = AttributeKey.valueOf("COMMAND_ATTR");
 
-    public ConnectionManager(String trackerAddr) {
+    public ConnectionManager(FdfsClientConfig config) {
+        String trackerAddr = config.getTrackerAddr();
+        this.config = config;
         Assert.notEmpty(trackerAddr, "tracker addr not be null");
-        this.trackerAddr = trackerAddr;
         if (!trackerInit.get()) {
             //init tracker channel pool
             IpPortInfo ipPort = IpParseUtil.getIpPort(trackerAddr);
@@ -62,6 +61,7 @@ public class ConnectionManager {
             Map<SocketAddress, FixedChannelPool> spool = new ConcurrentHashMap<>();
             spool.put(socketAddress, fixedChannelPool);
             storageChannelPool.put(groupName, spool);
+            logger.info("init storage channel pool,groupName:{},addr:{}", groupName, socketAddress);
         }
     }
 
@@ -108,9 +108,24 @@ public class ConnectionManager {
     }
 
 
+    public void close() {
+        trackerChannelPool.close();
+        Set<String> groupNames = storageChannelPool.keySet();
+        for (String groupName : groupNames) {
+            Map<SocketAddress, FixedChannelPool> spoolMap = storageChannelPool.get(groupName);
+            Set<SocketAddress> spools = spoolMap.keySet();
+            for (SocketAddress spool : spools) {
+                FixedChannelPool fixedChannelPool = spoolMap.get(spool);
+                fixedChannelPool.close();
+            }
+        }
+    }
+
+
     private FixedChannelPool initStorageChannelPool(SocketAddress socketAddress) {
         Bootstrap storageBootstrap = new Bootstrap();
-        NioEventLoopGroup workerGroup = new NioEventLoopGroup(Runtime.getRuntime().availableProcessors() * 2, new ThreadFactory() {
+        NioEventLoopGroup workerGroup = new NioEventLoopGroup(config.getStoragePoolMaxCount() <= 0 ? Runtime.getRuntime().availableProcessors() * 2 :
+                config.getStoragePoolMaxCount(), new ThreadFactory() {
             private AtomicInteger threadIndex = new AtomicInteger(0);
 
             @Override
@@ -121,6 +136,8 @@ public class ConnectionManager {
         storageBootstrap.group(workerGroup)
                 .option(ChannelOption.TCP_NODELAY, true)
                 .option(ChannelOption.SO_KEEPALIVE, true)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, config.getConnectionTimeout())
+                .option(ChannelOption.SO_TIMEOUT, config.getSoTimeout())
                 .channel(NioSocketChannel.class)
                 .remoteAddress(socketAddress);
         FixedChannelPool channelPool = new FixedChannelPool(storageBootstrap, new ChannelPoolHandler() {
@@ -138,7 +155,7 @@ public class ConnectionManager {
             public void channelCreated(io.netty.channel.Channel ch) throws Exception {
                 ChannelPipeline pipeline = ch.pipeline();
                 pipeline.addLast("FdfsClientStorageHandler", new FdfsHandler());
-                pipeline.addLast(new IdleStateHandler(0, 0, 60 * 5));
+                pipeline.addLast(new IdleStateHandler(0, 0, config.getReadWriteIdleTime()));
                 logger.info("storage channel pool create channel,id:{}", ch.id().asShortText());
             }
         }, Runtime.getRuntime().availableProcessors());
@@ -149,7 +166,8 @@ public class ConnectionManager {
 
     private void initTrackerPool(IpPortInfo ipPort) {
         Bootstrap trackerBootstrap = new Bootstrap();
-        NioEventLoopGroup workerGroup = new NioEventLoopGroup(Runtime.getRuntime().availableProcessors() * 2, new ThreadFactory() {
+        NioEventLoopGroup workerGroup = new NioEventLoopGroup(config.getTrackerPoolMaxCount() <= 0 ? Runtime.getRuntime().availableProcessors() * 2 :
+                config.getTrackerPoolMaxCount(), new ThreadFactory() {
             private AtomicInteger threadIndex = new AtomicInteger(0);
 
             @Override
@@ -160,6 +178,8 @@ public class ConnectionManager {
         trackerBootstrap.group(workerGroup)
                 .option(ChannelOption.TCP_NODELAY, true)
                 .option(ChannelOption.SO_KEEPALIVE, true)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, config.getConnectionTimeout())
+                .option(ChannelOption.SO_TIMEOUT, config.getSoTimeout())
                 .channel(NioSocketChannel.class)
                 .remoteAddress(ipPort.getIp(), ipPort.getPort());
         trackerChannelPool = new FixedChannelPool(trackerBootstrap, new ChannelPoolHandler() {
@@ -177,14 +197,22 @@ public class ConnectionManager {
             public void channelCreated(io.netty.channel.Channel ch) throws Exception {
                 ChannelPipeline pipeline = ch.pipeline();
                 pipeline.addLast("FdfsTrackerStorageHandler", new FdfsHandler());
-                pipeline.addLast(new IdleStateHandler(0, 0, 60 * 5));
+                pipeline.addLast(new IdleStateHandler(0, 0, config.getReadWriteIdleTime()));
                 logger.info("tarcker channel pool create channel,id:{}", ch.id().asShortText());
             }
         }, Runtime.getRuntime().availableProcessors());
     }
 
+    public String getGroupName() throws FastdfsClientException {
+        Optional<String> any = storageChannelPool.keySet().stream().findAny();
+        if (any.isPresent()) {
+            return any.get();
+        }
+        throw new FastdfsClientException("choose groupName err");
+    }
 
-    public class FdfsHandler extends ChannelInboundHandlerAdapter {
+
+    private class FdfsHandler extends ChannelInboundHandlerAdapter {
 
         @Override
         public void userEventTriggered(ChannelHandlerContext ctx, Object evt) throws Exception {
@@ -192,22 +220,36 @@ public class ConnectionManager {
                 IdleStateEvent event = (IdleStateEvent) evt;
                 IdleState state = event.state();
                 if (IdleState.ALL_IDLE == state) {
-                    //todo close or write something
+                    //todo close or write active test command
                     logger.info("channel tragger idle state,id: {}", ctx.channel().id().asShortText());
                 }
             }
         }
 
+
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
             Command command = ctx.channel().attr(COMMAND_ATTR).get();
-            logger.info("read:{} ", command);
             command.decode(ctx.channel(), (ByteBuf) msg);
         }
 
+
+        @Override
+        public void channelActive(ChannelHandlerContext ctx) throws Exception {
+            super.channelActive(ctx);
+            logger.info("channel active,id:{}", ctx.channel().id().asShortText());
+        }
+
+        @Override
+        public void channelInactive(ChannelHandlerContext ctx) throws Exception {
+            super.channelInactive(ctx);
+            logger.info("channel inActive,id:{}", ctx.channel().id().asShortText());
+        }
+
+
         @Override
         public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-            cause.printStackTrace();
+            logger.info("channel exception catched,id:{}", ctx.channel().id().asShortText(), cause);
         }
     }
 

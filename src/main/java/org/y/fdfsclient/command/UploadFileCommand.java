@@ -22,6 +22,7 @@ public class UploadFileCommand extends AbstractCommand {
 
     private String extName;
 
+    //todo
     private int expireDays;
 
 
@@ -56,8 +57,10 @@ public class UploadFileCommand extends AbstractCommand {
         offset = header.length + sizeBytes.length;
         System.arraycopy(extNameBs, 0, wholePkg, offset, extNameBs.length);
         offset += extNameBs.length;
-        ProtoCommon.printBytes("[upload file cmd]", wholePkg);
-        return wholePkg;
+        byte[] body = new byte[wholePkg.length + fileSize];
+        System.arraycopy(wholePkg, 0, body, 0, wholePkg.length);
+        System.arraycopy(fileBytes, 0, body, wholePkg.length, fileBytes.length);
+        return body;
     }
 
     @Override
@@ -67,8 +70,6 @@ public class UploadFileCommand extends AbstractCommand {
         in.readBytes(body);
         String newGroupName = new String(body, 0, ProtoCommon.FDFS_GROUP_NAME_MAX_LEN).trim();
         String remoteFileName = new String(body, ProtoCommon.FDFS_GROUP_NAME_MAX_LEN, bodyLen - ProtoCommon.FDFS_GROUP_NAME_MAX_LEN);
-        log.info("newGroupName：" + newGroupName);
-        log.info("remoteFileName：" + remoteFileName);
         UploadFileResponse uploadFileResponse = new UploadFileResponse();
         uploadFileResponse.setGroupName(newGroupName);
         uploadFileResponse.setPath(remoteFileName);

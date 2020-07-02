@@ -3,7 +3,6 @@ package org.y.fdfsclient.command;
 import io.netty.buffer.ByteBuf;
 import org.y.fdfsclient.protocol.ProtoCommon;
 
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 
 /**

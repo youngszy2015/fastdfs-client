@@ -46,6 +46,7 @@ public abstract class AbstractCommand extends CountDownLatch implements Command 
             in.readBytes(header);
             if (header[PROTO_HEADER_CMD_INDEX] != expectCmd) {
                 log.warn("receive cmd is not expectCmd,close channel ,channel:[{}]", channel.id().asShortText());
+                completeOnError(new FastdfsClientException("receive cmd is not expectCmd,close channel"));
                 channel.close();
                 return;
             }
@@ -53,6 +54,7 @@ public abstract class AbstractCommand extends CountDownLatch implements Command 
             long bodyLength = buff2long(header, 0);
             if (bodyLength < 0) {
                 log.warn("receive empty body length,close channel ,channel:[{}]", channel.id().asShortText());
+                completeOnError(new FastdfsClientException("receive cmd is not expectCmd,close channel"));
                 channel.close();
                 return;
             }
@@ -61,6 +63,7 @@ public abstract class AbstractCommand extends CountDownLatch implements Command 
                         bodyLength,
                         expectBodyLength,
                         channel.id().asShortText());
+                completeOnError(new FastdfsClientException("receive cmd is not expectCmd,close channel"));
                 channel.close();
                 return;
             }
@@ -111,7 +114,7 @@ public abstract class AbstractCommand extends CountDownLatch implements Command 
         try {
             await();
             if (cause != null) {
-                throw new FastdfsClientException(cause.getMessage());
+                throw new FastdfsClientException(cause);
             }
             return result;
         } catch (InterruptedException e) {
@@ -124,7 +127,7 @@ public abstract class AbstractCommand extends CountDownLatch implements Command 
         try {
             await(timeout, unit);
             if (cause != null) {
-                throw new FastdfsClientException(cause.getMessage());
+                throw new FastdfsClientException(cause);
             }
             return result;
         } catch (InterruptedException e) {
@@ -133,6 +136,11 @@ public abstract class AbstractCommand extends CountDownLatch implements Command 
         return null;
     }
 
+    @Override
+    public void completeOnError(Throwable exception) {
+        cause = exception;
+        this.countDown();
+    }
 
     protected abstract byte[] doEncode();
 
